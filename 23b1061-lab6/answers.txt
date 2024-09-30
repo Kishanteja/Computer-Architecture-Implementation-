@@ -1,0 +1,12 @@
+input value for maximum recursion depth is when the val is not in array
+1)breakpoint
+  breakpoint is set after saving the registers and just before calling binarysearch
+  i.e, after 'sw $t0, 4($sp)' before 'jal binarysearch'
+2)stack contents
+  at the breakpoint stack has many call activation records
+  a) $ra at 24($sp) return address
+  b) $a0 at 20($sp) args
+  c) $a1 at 16($sp) args
+  d) $a2 at 12($sp) args
+  e) $a3 at 8($sp) args
+  f) $t0 at 4($sp) val

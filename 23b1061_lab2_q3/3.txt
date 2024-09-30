@@ -1,0 +1,426 @@
+module iterative_karatsuba_32_16(
+    input clk,
+    input rst,
+    input enable,
+    input [31:0] A,
+    input [31:0] B,
+    output [63:0] C
+);
+    // Internal signals
+    wire [31:0] T;
+    wire [63:0] Z;
+    wire [3:0] control_signals; // Adjust based on the control signals you need
+    
+    // Instantiate registers
+    reg32 T_reg(
+        .clk(clk),
+        .rst(rst),
+        .enable(enable),
+        .d(T),
+        .q(T)
+    );
+    
+    reg64 Z_reg(
+        .clk(clk),
+        .rst(rst),
+        .enable(enable),
+        .d(Z),
+        .q(Z)
+    );
+    
+    // Instantiate datapath
+    iterative_karatsuba_datapath datapath_inst(
+        .clk(clk),
+        .rst(rst),
+        .enable(enable),
+        .A(A),
+        .B(B),
+        .T(T),
+        .Z(Z),
+        .control(control_signals)
+    );
+    
+    // Instantiate control unit
+    iterative_karatsuba_control control_inst(
+        .clk(clk),
+        .rst(rst),
+        .enable(enable),
+        .control_signals(control_signals)
+    );
+    
+    // Connect final output
+    assign C = Z;
+    
+endmodule
+
+module iterative_karatsuba_datapath(
+    input clk,
+    input rst,
+    input enable,
+    input [31:0] A,
+    input [31:0] B,
+    output [31:0] T,
+    output [63:0] Z,
+    input [3:0] control
+);
+    // Internal signals
+    wire [15:0] A_low, A_high, B_low, B_high;
+    wire [31:0] P1, P2, P3;
+    
+    // Divide A and B into lower and upper halves
+    assign A_low = A[15:0];
+    assign A_high = A[31:16];
+    assign B_low = B[15:0];
+    assign B_high = B[31:16];
+    
+    // Instantiate 16-bit Karatsuba multipliers
+    wire [31:0] product1, product2, product3;
+    
+    // Multiply lower halves
+    karatsuba16 mult1(
+        .X(A_low),
+        .Y(B_low),
+        .Z(product1)
+    );
+    
+    // Multiply higher halves
+    karatsuba16 mult2(
+        .X(A_high),
+        .Y(B_high),
+        .Z(product2)
+    );
+    
+    // Multiply cross products
+    karatsuba16 mult3(
+        .X(A_low + A_high),
+        .Y(B_low + B_high),
+        .Z(product3)
+    );
+    
+    // Compute final product using Karatsuba algorithm
+    assign P1 = product1;
+    assign P2 = product2;
+    assign P3 = product3 - product1 - product2;
+    assign Z = {P2, P3, P1};
+    
+endmodule
+
+module iterative_karatsuba_control(
+    input clk,
+    input rst,
+    input enable,
+    output reg [3:0] control_signals
+);
+    // State encoding
+    typedef enum reg [1:0] {
+        IDLE = 2'b00,
+        LOAD = 2'b01,
+        EXECUTE = 2'b10,
+        DONE = 2'b11
+    } state_t;
+    
+    reg [1:0] state, next_state;
+    
+    // State register
+    always @(posedge clk or posedge rst) begin
+        if (rst)
+            state <= IDLE;
+        else
+            state <= next_state;
+    end
+    
+    // Next state logic
+    always @(*) begin
+        case (state)
+            IDLE: if (enable) next_state = LOAD;
+                  else next_state = IDLE;
+            LOAD: next_state = EXECUTE;
+            EXECUTE: next_state = DONE;
+            DONE: next_state = IDLE;
+            default: next_state = IDLE;
+        endcase
+    end
+    
+    // Output control signals based on state
+    always @(*) begin
+        case (state)
+            IDLE: control_signals = 4'b0000; // Example control signals
+            LOAD: control_signals = 4'b0001;
+            EXECUTE: control_signals = 4'b0010;
+            DONE: control_signals = 4'b0011;
+            default: control_signals = 4'b0000;
+        endcase
+    end
+    
+endmodule
+
+module karatsuba16(
+    input [15:0] X,
+    input [15:0] Y,
+    output [31:0] Z
+);
+    // Internal signals
+    wire [15:0] X_low, X_high, Y_low, Y_high;
+    wire [31:0] P1, P2, P3;
+    
+    // Divide X and Y into lower and upper halves
+    assign X_low = X[15:0];
+    assign X_high = X[31:16];
+    assign Y_low = Y[15:0];
+    assign Y_high = Y[31:16];
+    
+    // Multiply lower halves
+    assign P1 = X_low * Y_low;
+    
+    // Multiply higher halves
+    assign P2 = X_high * Y_high;
+    
+    // Multiply cross products
+    assign P3 = (X_low + X_high) * (Y_low + Y_high) - P1 - P2;
+    
+    // Compute final product
+    assign Z = {P2, P3[15:0]} + {P3[31:16], 16'b0} + {16'b0, P1};
+    
+endmodule
+
+module reg32(
+    input clk,
+    input rst,
+    input enable,
+    input [31:0] d,
+    output reg [31:0] q
+);
+    always @(posedge clk or posedge rst) begin
+        if (rst)
+            q <= 32'b0;
+        else if (enable)
+            q <= d;
+    end
+endmodule
+
+module reg64(
+    input clk,
+    input rst,
+    input enable,
+    input [63:0] d,
+    output reg [63:0] q
+);
+    always @(posedge clk or posedge rst) begin
+        if (rst)
+            q <= 64'b0;
+        else if (enable)
+            q <= d;
+    end
+endmodule
+
+module iterative_karatsuba_32_16(
+    input clk,
+    input rst,
+    input enable,
+    input [31:0] A,
+    input [31:0] B,
+    output [63:0] C
+);
+    // Internal signals
+    wire [31:0] T;
+    wire [63:0] Z;
+    wire [3:0] control_signals; // Adjust based on the control signals you need
+    
+    // Instantiate registers
+    reg32 T_reg(
+        .clk(clk),
+        .rst(rst),
+        .enable(enable),
+        .d(T),
+        .q(T)
+    );
+    
+    reg64 Z_reg(
+        .clk(clk),
+        .rst(rst),
+        .enable(enable),
+        .d(Z),
+        .q(Z)
+    );
+    
+    // Instantiate datapath
+    iterative_karatsuba_datapath datapath_inst(
+        .clk(clk),
+        .rst(rst),
+        .enable(enable),
+        .A(A),
+        .B(B),
+        .T(T),
+        .Z(Z),
+        .control(control_signals)
+    );
+    
+    // Instantiate control unit
+    iterative_karatsuba_control control_inst(
+        .clk(clk),
+        .rst(rst),
+        .enable(enable),
+        .control_signals(control_signals)
+    );
+    
+    // Connect final output
+    assign C = Z;
+    
+endmodule
+module karatsuba16(
+    input [15:0] X,
+    input [15:0] Y,
+    output [31:0] Z
+);
+    // Internal signals
+    wire [15:0] X_low, X_high, Y_low, Y_high;
+    wire [15:0] P1, P2, P3;
+    
+    // Divide X and Y into lower and upper halves
+    assign X_low = X[15:0];
+    assign X_high = X[31:16];
+    assign Y_low = Y[15:0];
+    assign Y_high = Y[31:16];
+    
+    // Multiply lower halves
+    assign P1 = X_low * Y_low;
+    
+    // Multiply higher halves
+    assign P2 = X_high * Y_high;
+    
+    // Multiply cross products
+    assign P3 = (X_low + X_high) * (Y_low + Y_high) - P1 - P2;
+    
+    // Compute final product
+    assign Z = {P2, P3[15:0]} + {P3[31:16], 16'b0} + {16'b0, P1};
+    
+endmodule
+module iterative_karatsuba_datapath(
+    input clk,
+    input rst,
+    input enable,
+    input [31:0] A,
+    input [31:0] B,
+    output [31:0] T,
+    output [63:0] Z,
+    input [3:0] control
+);
+    // Internal signals
+    wire [15:0] A_low, A_high, B_low, B_high;
+    wire [31:0] P1, P2, P3;
+    
+    // Divide A and B into lower and upper halves
+    assign A_low = A[15:0];
+    assign A_high = A[31:16];
+    assign B_low = B[15:0];
+    assign B_high = B[31:16];
+    
+    // Instantiate 16-bit Karatsuba multipliers
+    wire [31:0] product1, product2, product3;
+    
+    // Multiply lower halves
+    karatsuba16 mult1(
+        .X(A_low),
+        .Y(B_low),
+        .Z(product1)
+    );
+    
+    // Multiply higher halves
+    karatsuba16 mult2(
+        .X(A_high),
+        .Y(B_high),
+        .Z(product2)
+    );
+    
+    // Multiply cross products
+    karatsuba16 mult3(
+        .X(A_low + A_high),
+        .Y(B_low + B_high),
+        .Z(product3)
+    );
+    
+    // Compute final product using Karatsuba algorithm
+    assign P1 = product1;
+    assign P2 = product2;
+    assign P3 = product3 - product1 - product2;
+    assign Z = {P2, P3, P1};
+    
+endmodule
+module iterative_karatsuba_control(
+    input clk,
+    input rst,
+    input enable,
+    output reg [3:0] control_signals
+);
+    // State encoding
+    typedef enum reg [1:0] {
+        IDLE = 2'b00,
+        LOAD = 2'b01,
+        EXECUTE = 2'b10,
+        DONE = 2'b11
+    } state_t;
+    
+    reg [1:0] state, next_state;
+    
+    // State register
+    always @(posedge clk or posedge rst) begin
+        if (rst)
+            state <= IDLE;
+        else
+            state <= next_state;
+    end
+    
+    // Next state logic
+    always @(*) begin
+        case (state)
+            IDLE: if (enable) next_state = LOAD;
+                  else next_state = IDLE;
+            LOAD: next_state = EXECUTE;
+            EXECUTE: next_state = DONE;
+            DONE: next_state = IDLE;
+            default: next_state = IDLE;
+        endcase
+    end
+    
+    // Output control signals based on state
+    always @(*) begin
+        case (state)
+            IDLE: control_signals = 4'b0000; // Example control signals
+            LOAD: control_signals = 4'b0001;
+            EXECUTE: control_signals = 4'b0010;
+            DONE: control_signals = 4'b0011;
+            default: control_signals = 4'b0000;
+        endcase
+    end
+    
+endmodule
+module reg32(
+    input clk,
+    input rst,
+    input enable,
+    input [31:0] d,
+    output reg [31:0] q
+);
+    always @(posedge clk or posedge rst) begin
+        if (rst)
+            q <= 32'b0;
+        else if (enable)
+            q <= d;
+    end
+endmodule
+
+module reg64(
+    input clk,
+    input rst,
+    input enable,
+    input [63:0] d,
+    output reg [63:0] q
+);
+    always @(posedge clk or posedge rst) begin
+        if (rst)
+            q <= 64'b0;
+        else if (enable)
+            q <= d;
+    end
+endmodule
+

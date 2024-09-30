@@ -1,0 +1,12 @@
+q1:
+    text: this displays assembly instructions . here we can see
+        our instructions with memories and addresses
+    data: this shows data stored in memory
+    registers:here we can see the values stored in the registers
+    fp-register:i didnt understand fp registers
+
+q2:
+    a: address begins at 00400024
+    b: no it is a pseudo instruction. it get translated into ori
+    c: machine codes 34080001 34090002 01095020
+       op-code       001101   001101   000000
